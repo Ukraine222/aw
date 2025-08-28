@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>CheckOut.io — шашки онлайн</title>
+
+<!-- Tailwind CDN для ускорения верстки -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- PeerJS CDN -->
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+<style>
+  /* === Основной стиль: деревенский, дерево, гвозди, комфорт === */
+  :root{
+    --wood-1:#6b3e1a; /* темное дерево */
+    --wood-2:#b88655; /* светлое дерево */
+    --accent:#4f46e5;
+    --muted:#6b7280;
+    --panel:#f8f3ed;
+    --rounded:14px;
+    --shadow: 0 12px 30px rgba(15,23,42,0.12);
+    --bold-rus: "Inter", "Noto Sans", sans-serif;
+  }
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family:var(--bold-rus);
+    background: linear-gradient(180deg,#f2efe9 0%, #efe7d8 100%);
+    color:#111827;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  /* 3D loader area */
+  .loader-wrap{height:220px; display:flex; align-items:center; justify-content:center; gap:18px; padding:28px;}
+  .palma-3d {
+    width:180px;height:180px;border-radius:18px;background:
+      linear-gradient(180deg, rgba(0,0,0,0.06), rgba(255,255,255,0.02)),
+      radial-gradient(circle at 20% 20%, rgba(255,255,255,0.06), transparent 15%),
+      linear-gradient(90deg,var(--wood-2), #d9b08b);
+    box-shadow: var(--shadow);
+    display:flex;align-items:center;justify-content:center;transform-style:preserve-3d;
+    perspective:900px; position:relative; overflow:hidden;
+  }
+  .palma-3d .plate{
+    width:150px;height:150px;border-radius:12px;background:linear-gradient(180deg,#f3e0c9,#debb8b);
+    transform: rotateX(18deg) rotateY(-18deg) rotateZ(-6deg) translateZ(30px);
+    box-shadow: 0 18px 40px rgba(8,8,8,0.14);
+    display:flex;align-items:center;justify-content:center; font-weight:800; font-size:16px;
+    color:var(--wood-1); letter-spacing:0.6px;
+    transition: transform .9s cubic-bezier(.2,.8,.2,1);
+  }
+  .palma-3d:hover .plate{ transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) translateZ(40px) scale(1.02); }
+
+  /* palm image below */
+  .palm-img { width:120px; height:120px; object-fit:contain; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.12)); }
+
+  /* Layout */
+  .wrap { max-width:1200px; margin:18px auto; padding:18px; display:flex; gap:18px; }
+  .sidebar { width:260px; display:flex; flex-direction:column; gap:12px; }
+  .main { flex:1; display:flex; flex-direction:column; gap:12px; }
+
+  /* Wooden panels */
+  .wood-panel{
+    background: linear-gradient(180deg,var(--wood-2), #d3a57c);
+    border-radius: var(--rounded);
+    padding:12px;
+    box-shadow: var(--shadow);
+    color:#fff;
+  }
+  .panel-light{
+    background: linear-gradient(180deg,#fffaf6,#f5e9d8);
+    border-radius: var(--rounded);
+    padding:12px;
+    box-shadow: var(--shadow);
+    color:#111827;
+  }
+
+  /* Tabs (left) */
+  .tab {
+    display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;
+    cursor:pointer; user-select:none; transition: all .18s ease;
+    background: linear-gradient(180deg, rgba(0,0,0,0.03), transparent);
+    border: 2px solid rgba(0,0,0,0.04);
+  }
+  .tab:hover{ transform: translateX(6px); }
+  .tab.active{ background: linear-gradient(180deg,#fdf7ef,#f3e0c9); color:var(--wood-1); box-shadow: 0 8px 24px rgba(0,0,0,0.09); border-color: rgba(0,0,0,0.08); }
+
+  .tab svg{ width:28px;height:28px; flex-shrink:0; filter: drop-shadow(0 6px 12px rgba(0,0,0,0.12)); }
+
+  /* Big wooden buttons */
+  .wood-btn{
+    display:inline-flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;
+    background: linear-gradient(180deg,#8b5a36,#6b3e1a); color:#fff; border:none; cursor:pointer; font-weight:800;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.18); transition: transform .12s ease;
+  }
+  .wood-btn:active{ transform: translateY(2px); }
+  .wood-ghost{ background:linear-gradient(180deg,#f7efe0,#efe0c7); color:var(--wood-1); border:2px solid rgba(0,0,0,0.06); }
+
+  /* Board */
+  .board-wrap{
+    border-radius:18px; padding:14px; background:
+       linear-gradient(180deg,#edd7b6,#d7b089);
+    box-shadow: var(--shadow);
+  }
+  .checkers-board {
+    display:grid; grid-template-columns: repeat(8, 1fr); gap:8px; width:min(720px,85vw); aspect-ratio:1/1;
+    padding:12px; border-radius:12px; background: linear-gradient(180deg,#cfa67a,#b88455);
+  }
+  .square{ position:relative; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:default; overflow:hidden; user-select:none; }
+  .square.light{ background:linear-gradient(180deg,#f9e6cd,#f1d2a7);}
+  .square.dark{ background:linear-gradient(180deg,#a2673b,#8b4f2b);} 
+  .square:hover{ transform: translateY(-4px); transition: all .12s ease; }
+
+  .piece{
+    width:72%; height:72%; border-radius:999px; display:flex;align-items:center;justify-content:center; font-weight:800; box-shadow: 0 8px 22px rgba(0,0,0,0.16);
+    transition: transform .25s cubic-bezier(.2,.9,.2,1), box-shadow .25s;
+  }
+  .piece.white{ color:#0f172a; border:2px solid rgba(255,255,255,0.9); }
+  .piece.black{ color:#fff; border:2px solid rgba(0,0,0,0.12); }
+  .piece.king{ box-shadow: 0 16px 40px rgba(0,0,0,0.22), inset 0 -8px 12px rgba(0,0,0,0.06); }
+
+  /* Move indicator */
+  .move-dot{ position:absolute; width:16px; height:16px; border-radius:999px; background:rgba(255,255,255,0.85); box-shadow:0 4px 10px rgba(0,0,0,0.15); }
+
+  /* Rounded inputs & small UI */
+  .rounded-input{ padding:8px 10px; border-radius:10px; border:1px solid rgba(0,0,0,0.06); }
+
+  /* Shop/grid */
+  .shop-grid{ display:grid; grid-template-columns: repeat(2,1fr); gap:12px; max-height:420px; overflow:auto; padding-right:6px; }
+  .skin-card{ background:linear-gradient(180deg,#fff8f1,#fff1e0); border-radius:12px; padding:8px; display:flex; gap:8px; align-items:center; justify-content:space-between; border:1px solid rgba(0,0,0,0.04); }
+  .skin-preview{ width:70px; height:50px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); box-shadow:0 8px 18px rgba(0,0,0,0.08) inset; display:flex; align-items:center; justify-content:center; font-weight:700; color:#222; }
+
+  /* rarity badges */
+  .rarity { padding:6px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#fff; }
+  .rar-Common{ background:#8b5a36; }   /* common dark wood */
+  .rar-Rare{ background:#2b6cb0; }     /* blue */
+  .rar-Epic{ background:#7c3aed; }     /* purple */
+  .rar-Ultra{ background:#d69e2e; }    /* gold */
+  .rar-Mythic{ background:#1f7a6b; }   /* teal */
+  .rar-Legend{ background:#d946ef; }   /* pink */
+  .rar-Elite{ background:#f97316; }    /* orange */
+
+  /* top bar: balance and nick */
+  .topbar { display:flex; align-items:center; gap:12px; justify-content:space-between; margin-bottom:6px; }
+  .balance { background:linear-gradient(180deg,#fffaf6,#f3e6d0); padding:8px 12px; border-radius:999px; display:flex; gap:8px; align-items:center; border:1px solid rgba(0,0,0,0.04); box-shadow: 0 8px 24px rgba(0,0,0,0.06);}
+  .nick-frame { background:linear-gradient(180deg,#fff6ed,#ffe8c8); padding:8px 12px; border-radius:999px; border:1px solid rgba(0,0,0,0.04); font-weight:800; }
+  .dollar-icon{ width:18px; height:18px; display:inline-block; background:linear-gradient(180deg,#4f46e5,#7c3aed); color:#fff; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:12px; }
+
+  /* tiny clover footer */
+  .clover{ position:fixed; left:18px; bottom:18px; background:linear-gradient(180deg,#dff8ef,#bfeee0); padding:10px 14px; border-radius:999px; box-shadow: 0 10px 26px rgba(0,0,0,0.12); font-weight:800; color:#0f5132; }
+
+  /* responsive */
+  @media (max-width:980px){
+    .wrap { flex-direction:column; padding:12px; }
+    .sidebar{ width:100%; flex-direction:row; overflow:auto; gap:8px; }
+    .main{ width:100%; }
+    .shop-grid{ grid-template-columns: repeat(1,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- 3D loader + nickname modal -->
+<div style="max-width:1200px;margin:18px auto;padding:12px;">
+  <div class="loader-wrap panel-light" id="loader">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+      <div class="palma-3d" role="img" aria-label="Palma Soft Engine">
+        <div class="plate">Palma Soft Engine</div>
+      </div>
+      <img class="palm-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><g><path d='M80 10 C90 40, 140 60, 140 90 C120 70, 100 90, 80 110 C60 90, 40 70, 20 90 C20 60, 70 40, 80 10' fill='%230e7b3d'/></g></svg>" alt="palm"/>
+      <div style="text-align:center;font-weight:800;font-size:18px;">Добро пожаловать в CheckOut.io</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="enterBtn" class="wood-btn">Войти</button>
+        <button id="guestBtn" class="wood-btn wood-ghost">Войти как гость</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Главное приложение -->
+<div id="app" style="display:none;">
+  <div class="wrap">
+    <!-- Sidebar с вкладками -->
+    <div class="sidebar">
+      <div class="wood-panel" style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-weight:900;font-size:18px;">CheckOut.io</div>
+        <div style="font-size:12px;">Деревня • Доски • Гвозди</div>
+        <div style="height:8px"></div>
+        <!-- Tabs -->
+        <div id="tabBattle" class="tab active" data-tab="battle">
+          <!-- icon: crossed swords -->
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 21l6-6" stroke="#4b2e12" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 3l6 6" stroke="#4b2e12" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 3l13 13" stroke="#7c4b2b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div style="display:flex;flex-direction:column">
+            <div style="font-weight:900">Битва</div>
+            <div style="font-size:12px;color:rgba(0,0,0,0.6)">Играй онлайн/офлайн</div>
+          </div>
+        </div>
+
+        <div id="tabShop" class="tab" data-tab="shop">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="13" rx="2" stroke="#4b2e12" stroke-width="1.6"/></svg>
+          <div style="display:flex;flex-direction:column">
+            <div style="font-weight:900">Магазин</div>
+            <div style="font-size:12px;color:rgba(0,0,0,0.6)">Купи скины</div>
+          </div>
+        </div>
+
+        <div id="tabInv" class="tab" data-tab="inv">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v18" stroke="#4b2e12" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="#4b2e12" stroke-width="1.6"/></svg>
+          <div style="display:flex;flex-direction:column">
+            <div style="font-weight:900">Скины</div>
+            <div style="font-size:12px;color:rgba(0,0,0,0.6)">Инвентарь</div>
+          </div>
+        </div>
+
+        <div style="height:12px"></div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.9); font-weight:800;">Версия 1.1</div>
+      </div>
+    </div>
+
+    <!-- Main area -->
+    <div class="main">
+      <!-- Top bar: balance and nick -->
+      <div class="topbar">
+        <div style="display:flex;gap:12px;align-items:center">
+          <div class="balance">
+            <div class="dollar-icon">$</div>
+            <div style="font-weight:800;">Баланс</div>
+            <div id="balanceVal" style="font-weight:900;padding-left:6px;">$100.00</div>
+          </div>
+          <div class="nick-frame" id="nickFrame">Игрок: <span id="nickText">—</span></div>
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="settingsBtn" class="wood-btn wood-ghost">⚙ Настройки</button>
+        </div>
+      </div>
+
+      <!-- Contents: multiple panes -->
+      <div id="contentArea">
+        <!-- Battle pane -->
+        <div id="pane-battle">
+          <div class="panel-light" style="padding:14px; border-radius:14px;">
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="flex:1">
+                <div style="font-weight:900;font-size:18px">Битва</div>
+                <div style="font-size:13px;color:var(--muted)">Выбери режим: Онлайн или Офлайн с ботом</div>
+              </div>
+
+              <div style="display:flex;gap:10px;align-items:center">
+                <button id="btnOffline" class="wood-btn" title="Играть против бота">
+                  <!-- bot icon -->
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="12" rx="2" stroke="#fff" stroke-width="1.6"/></svg>
+                  Офлайн
+                </button>
+                <button id="btnOnline" class="wood-btn wood-ghost" title="Играть онлайн">
+                  <!-- network icon -->
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3v3" stroke="#6b3e1a" stroke-width="1.6"/><path d="M12 18v3" stroke="#6b3e1a" stroke-width="1.6"/><path d="M3 12h3" stroke="#6b3e1a" stroke-width="1.6"/></svg>
+                  Онлайн
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Online room controls (wooden rounded) -->
+          <div id="onlineControls" class="panel-light" style="margin-top:12px; display:none;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button id="createRoom" class="wood-btn">Создать комнату</button>
+              <input id="roomInput" class="rounded-input" placeholder="ID комнаты или ссылка ?room=" style="min-width:260px"/>
+              <button id="joinRoom" class="wood-btn wood-ghost">Присоединиться</button>
+              <button id="copyLinkBtn" class="wood-btn wood-ghost" title="Копировать ссылку">📋</button>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+              <div style="font-size:13px;color:var(--muted)">Статус: <span id="onlineStatus">—</span></div>
+              <div style="font-size:13px;color:var(--muted)">Local Peer ID: <span id="peerId" class="font-mono">—</span></div>
+            </div>
+          </div>
+
+          <!-- Board area -->
+          <div class="board-wrap" style="margin-top:12px;">
+            <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <div style="font-weight:900;font-size:16px">Поле</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button id="resetBtn" class="wood-btn wood-ghost">Сброс</button>
+                <div style="font-size:14px;color:var(--muted)">Ход: <span id="turn">—</span></div>
+              </div>
+            </div>
+
+            <div class="checkers-board" id="board"></div>
+          </div>
+        </div>
+
+        <!-- Shop pane -->
+        <div id="pane-shop" style="display:none;">
+          <div class="panel-light" style="padding:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div style="font-weight:900;font-size:18px">Магазин</div>
+              <div style="font-size:13px;color:var(--muted)">Раритеты влияют на эффекты при ходе</div>
+            </div>
+
+            <div class="shop-grid" id="shopGrid"></div>
+          </div>
+        </div>
+
+        <!-- Inventory (skins) pane -->
+        <div id="pane-inv" style="display:none;">
+          <div class="panel-light" style="padding:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div style="font-weight:900;font-size:18px">Инвентарь</div>
+              <div style="font-size:13px;color:var(--muted)">Применяй скины — это видно противнику</div>
+            </div>
+
+            <div id="invList" class="shop-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- bottom info -->
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:800; font-size:14px;">CheckOut.io — Деревня, доски, гвозди</div>
+        <div class="clover">1.1 updt • By Ilnitsky</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================
+   CheckOut.io — Main script
+   Uses PeerJS P2P logic adapted from user's code
+   ============================ */
+
+(function(){
+  // ---------- Utilities ----------
+  const q = s => document.querySelector(s);
+  const htmlEncode = s => String(s).replace(/[&<>"]/g, c=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  // ---------- Global state ----------
+  const STATE = {
+    board: null,
+    turn: 'white',
+    selected: null,
+    moves: [],
+    peer: null,
+    conn: null,
+    peerId: null,
+    role: 'host',
+    nick: null,
+    balance: 100.00,
+    owned: new Set(),
+    activeSkin: 'skin_0',
+    skins: [],
+    localSkinMap: {}, // playerId->skin for online (synced)
+    coinsCurrency: '$'
+  };
+
+  // ---------- Generate 50 skins programmatically ----------
+  const RARITIES = [
+    {key:'Common', label:'Общий', css:'rar-Common'},
+    {key:'Rare', label:'Редкий', css:'rar-Rare'},
+    {key:'Epic', label:'Эпический', css:'rar-Epic'},
+    {key:'Ultra', label:'Ультраредкий', css:'rar-Ultra'},
+    {key:'Mythic', label:'Мифический', css:'rar-Mythic'},
+    {key:'Legend', label:'Легендарный', css:'rar-Legend'},
+    {key:'Elite', label:'Элитный', css:'rar-Elite'}
+  ];
+  // We'll make distribution: many commons, few elites
+  function generateSkins(){
+    const skins = [];
+    for(let i=0;i<50;i++){
+      const id = 'skin_' + i;
+      // rarity by index
+      let rarity;
+      if(i < 20) rarity = RARITIES[0]; // Common
+      else if(i < 32) rarity = RARITIES[1]; // Rare
+      else if(i < 40) rarity = RARITIES[2]; // Epic
+      else if(i < 44) rarity = RARITIES[3]; // Ultra
+      else if(i < 47) rarity = RARITIES[4]; // Mythic
+      else if(i < 49) rarity = RARITIES[5]; // Legend
+      else rarity = RARITIES[6]; // Elite
+
+      // price by rarity and index
+      const base = ({'Common':0,'Rare':5,'Epic':12,'Ultra':30,'Mythic':60,'Legend':120,'Elite':250})[rarity.key];
+      const price = Math.round((base + i%7 * (base?0.5:0)) * 10) / 10;
+
+      // simple preview patterns generated with gradients
+      const bg = `linear-gradient(135deg, hsl(${(i*37)%360} 60% 85%), hsl(${(i*23)%360} 45% 65%))`;
+
+      // effect: for higher rarity we will animate piece on move with glow/trail etc.
+      const effect = (rarity.key === 'Common') ? 'static' :
+                     (rarity.key === 'Rare') ? 'glow' :
+                     (rarity.key === 'Epic') ? 'glow-trail' :
+                     (rarity.key === 'Ultra') ? 'sparkle' :
+                     (rarity.key === 'Mythic') ? 'golden-trail' :
+                     (rarity.key === 'Legend') ? 'royal' : 'ethereal';
+
+      skins.push({ id, name:`Узор ${i+1}`, price, rarity: rarity.key, rarityLabel: rarity.label, rarityClass: rarity.css, preview:bg, effect });
+    }
+    return skins;
+  }
+  STATE.skins = generateSkins();
+
+  // ---------- Persistence ----------
+  const STORE = 'checkout_demo_v1';
+  function saveLocal(){
+    try{
+      localStorage.setItem(STORE, JSON.stringify({
+        nick: STATE.nick, balance: STATE.balance, owned: Array.from(STATE.owned), activeSkin: STATE.activeSkin, localSkinMap: STATE.localSkinMap
+      }));
+    }catch(e){}
+  }
+  function loadLocal(){
+    try{
+      const raw = localStorage.getItem(STORE);
+      if(!raw) return;
+      const o = JSON.parse(raw);
+      if(o.nick) STATE.nick = o.nick;
+      if(o.balance !== undefined) STATE.balance = o.balance;
+      if(Array.isArray(o.owned)) STATE.owned = new Set(o.owned);
+      if(o.activeSkin) STATE.activeSkin = o.activeSkin;
+      if(o.localSkinMap) STATE.localSkinMap = o.localSkinMap;
+    }catch(e){}
+  }
+  loadLocal();
+
+  // ---------- UI Elements ----------
+  const enterBtn = q('#enterBtn'), guestBtn = q('#guestBtn'), loaderWrap = q('#loader');
+  const appWrap = q('#app');
+  const nickText = q('#nickText'), nickFrame = q('#nickFrame');
+  const balanceVal = q('#balanceVal');
+  const tabBattle = q('#tabBattle'), tabShop = q('#tabShop'), tabInv = q('#tabInv');
+  const paneBattle = q('#pane-battle'), paneShop = q('#pane-shop'), paneInv = q('#pane-inv');
+  const btnOffline = q('#btnOffline'), btnOnline = q('#btnOnline');
+  const onlineControls = q('#onlineControls'), createRoomBtn = q('#createRoom'), joinRoomBtn = q('#joinRoom'), copyLinkBtn = q('#copyLinkBtn');
+  const roomInput = q('#roomInput'), onlineStatus = q('#onlineStatus'), peerIdEl = q('#peerId');
+  const boardEl = q('#board'), turnEl = q('#turn'), resetBtn = q('#resetBtn'), onlineCreate = q('#createRoom');
+  const shopGrid = q('#shopGrid'), invList = q('#invList');
+  const copyRoomBtn = q('#copyLinkBtn'), copyPeerBtn = q('#copyLinkBtn');
+
+  // ---------- Nick modal and enter ----------
+  function askNick(promptText = 'Введите ник') {
+    const name = prompt(promptText, STATE.nick || ('Player' + Math.floor(Math.random()*900+100)));
+    if(name && name.trim()) { STATE.nick = name.trim(); saveLocal(); }
+    else { STATE.nick = 'Guest' + Math.floor(Math.random()*900+100); saveLocal(); }
+    nickText.textContent = STATE.nick;
+  }
+
+  enterBtn.onclick = () => {
+    askNick('Введите ваш ник'); startApp();
+  };
+  guestBtn.onclick = () => {
+    if(!STATE.nick) askNick('Введите ник (гость)');
+    startApp();
+  };
+
+  function startApp(){
+    loaderWrap.style.display = 'none';
+    appWrap.style.display = '';
+    nickText.textContent = STATE.nick || '—';
+    balanceVal.textContent = `${STATE.coinsCurrency}${STATE.balance.toFixed(2)}`;
+    // init default owned skin
+    if(STATE.owned.size === 0){
+      STATE.owned.add(STATE.skins[0].id);
+      STATE.activeSkin = STATE.skins[0].id;
+    }
+    renderTabs();
+    renderShop();
+    renderInv();
+    initBoard();
+    renderBoard();
+    initPeerAuto();
+  }
+
+  // ---------- Tabs ----------
+  function clearActiveTabs(){
+    [tabBattle, tabShop, tabInv].forEach(t => t.classList.remove('active'));
+    [paneBattle, paneShop, paneInv].forEach(p => p.style.display = 'none');
+  }
+  tabBattle.onclick = ()=>{ clearActiveTabs(); tabBattle.classList.add('active'); paneBattle.style.display='block'; };
+  tabShop.onclick = ()=>{ clearActiveTabs(); tabShop.classList.add('active'); paneShop.style.display='block'; };
+  tabInv.onclick = ()=>{ clearActiveTabs(); tabInv.classList.add('active'); paneInv.style.display='block'; };
+
+  // ---------- Board logic (русские шашки simplified) ----------
+  function initBoard(){
+    const b = Array.from({length:8}, ()=>Array.from({length:8}, ()=>null));
+    for(let r=0;r<3;r++) for(let c=0;c<8;c++) if((r+c)%2===1) b[r][c] = { color:'black', king:false };
+    for(let r=5;r<8;r++) for(let c=0;c<8;c++) if((r+c)%2===1) b[r][c] = { color:'white', king:false };
+    STATE.board = b;
+    STATE.turn = 'white';
+    STATE.selected = null;
+    STATE.moves = [];
+  }
+  function cloneBoard(b){ return b.map(row => row.map(cell => cell ? {...cell} : null)); }
+  function within(n){ return n>=0 && n<8; }
+  function getMovesFor(r,c){
+    const piece = STATE.board[r][c]; if(!piece) return [];
+    const dirs = piece.king ? [[1,1],[1,-1],[-1,1],[-1,-1]] : (piece.color==='white'? [[-1,-1],[-1,1]]:[[1,-1],[1,1]]);
+    const moves = [];
+    for(const [dr,dc] of dirs){
+      const nr=r+dr,nc=c+dc;
+      if(within(nr)&&within(nc)&&!STATE.board[nr][nc]) moves.push({to:[nr,nc],capture:null});
+      const jr=r+2*dr,jc=c+2*dc,mr=r+dr,mc=c+dc;
+      if(within(jr)&&within(jc)&&STATE.board[mr][mc]&&STATE.board[mr][mc].color!==piece.color&&!STATE.board[jr][jc]) moves.push({to:[jr,jc],capture:[mr,mc]});
+    }
+    return moves;
+  }
+  function applyMove(from,to){
+    const b = cloneBoard(STATE.board);
+    const piece = b[from[0]][from[1]];
+    if(!piece) return;
+    b[from[0]][from[1]] = null;
+    if(Math.abs(to[0]-from[0])===2){
+      const mr=(from[0]+to[0])/2, mc=(from[1]+to[1])/2; b[mr][mc] = null;
+    }
+    b[to[0]][to[1]] = {...piece};
+    // crown
+    if(!piece.king){
+      if(piece.color==='white' && to[0]===0) b[to[0]][to[1]].king = true;
+      if(piece.color==='black' && to[0]===7) b[to[0]][to[1]].king = true;
+    }
+    STATE.board = b;
+  }
+
+  // ---------- Rendering board ----------
+  function renderBoard(){
+    boardEl.innerHTML = '';
+    for(let r=0;r<8;r++){
+      for(let c=0;c<8;c++){
+        const dark = (r+c)%2===1;
+        const sq = document.createElement('div');
+        sq.className = 'square ' + (dark ? 'dark' : 'light');
+        sq.style.cursor = 'pointer';
+        sq.addEventListener('click', ()=>onCellClick(r,c));
+        const cell = STATE.board[r][c];
+        if(cell){
+          const p = document.createElement('div');
+          p.className = 'piece ' + (cell.color==='white' ? 'white' : 'black') + (cell.king ? ' king' : '');
+          // skin background from active skin of owner - for local single player show STATE.activeSkin
+          let skinId = STATE.activeSkin;
+          // online: if mapping exists for that player's id, use it (we will render simple: white pieces use skin for 'white', black use for 'black' player)
+          if(STATE.localSkinMap && (cell.color === 'white' ? STATE.localSkinMap['white'] : STATE.localSkinMap['black'])){
+            skinId = STATE.localSkinMap[cell.color === 'white' ? 'white' : 'black'];
+          }
+          // get skin preview
+          let skinObj = STATE.skins.find(s=>s.id === skinId) || STATE.skins[0];
+          // fallback to gradient or text
+          p.style.background = skinObj.preview;
+          if(cell.king) p.textContent = '♔';
+          // add effect class based on rarity/effect
+          p.dataset.effect = skinObj.effect;
+          // simple effect: add small border glow for rarity
+          if(skinObj.rarity === 'Legend' || skinObj.rarity === 'Elite'){
+            p.style.boxShadow = "0 12px 34px rgba(255,215,0,0.18), 0 6px 10px rgba(0,0,0,0.12)";
+          } else if(skinObj.rarity === 'Mythic' || skinObj.rarity === 'Ultra'){
+            p.style.boxShadow = "0 12px 34px rgba(124,58,237,0.12)";
+          }
+          sq.appendChild(p);
+        }
+        // dots for moves
+        if(STATE.moves.some(m=>m.to[0]===r && m.to[1]===c)){
+          const dot = document.createElement('div'); dot.className = 'move-dot'; sq.appendChild(dot);
+        }
+        if(STATE.selected && STATE.selected[0]===r && STATE.selected[1]===c){
+          sq.style.boxShadow = 'inset 0 8px 26px rgba(79,70,229,0.12)';
+        }
+        boardEl.appendChild(sq);
+      }
+    }
+    turnEl.textContent = STATE.turn;
+    q('#peerId').textContent = STATE.peerId || '—';
+    q('#onlineStatus').textContent = STATE.conn && STATE.conn.open ? 'Connected' : 'Idle';
+    balanceVal.textContent = `${STATE.coinsCurrency}${STATE.balance.toFixed(2)}`;
+  }
+
+  // ---------- Click handling ----------
+  function onCellClick(r,c){
+    const cell = STATE.board[r][c];
+    // if selected -> try move
+    if(STATE.selected){
+      const mv = STATE.moves.find(m=>m.to[0]===r && m.to[1]===c);
+      if(mv){
+        const from = STATE.selected, to = [r,c];
+        if(STATE.role === 'host' || !STATE.conn){
+          // apply locally
+          applyMove(from,to);
+          STATE.turn = (STATE.turn==='white') ? 'black' : 'white';
+          renderBoard();
+          // if online and host, broadcast state
+          if(STATE.role === 'host' && STATE.conn && STATE.conn.open){
+            broadcast({ type:'state', payload: snapshot() });
+          }
+          // if offline vs bot, trigger bot move
+          if(!STATE.conn) setTimeout(() => botMoveIfNeeded(), 400);
+        } else {
+          // guest: send move request to host
+          send({ type:'move', payload:{ from, to }});
+        }
+
+        animatePieceMoveEffect(from,to);
+      }
+      STATE.selected = null;
+      STATE.moves = [];
+      renderBoard();
+      return;
+    }
+    // select own color piece only
+    if(cell && cell.color === STATE.turn){
+      STATE.selected = [r,c];
+      STATE.moves = getMovesFor(r,c);
+      renderBoard();
+    }
+  }
+
+  // ---------- Bot for offline ----------
+  function botMoveIfNeeded(){
+    // simple random legal move for opposite color
+    const color = STATE.turn;
+    const movesAll = [];
+    for(let r=0;r<8;r++){
+      for(let c=0;c<8;c++){
+        const piece = STATE.board[r][c];
+        if(piece && piece.color === color){
+          const m = getMovesFor(r,c);
+          for(const mv of m) movesAll.push({ from:[r,c], to: mv.to});
+        }
+      }
+    }
+    if(movesAll.length === 0) return;
+    const pick = movesAll[Math.floor(Math.random() * movesAll.length)];
+    applyMove(pick.from, pick.to);
+    STATE.turn = (STATE.turn==='white')? 'black' : 'white';
+    renderBoard();
+  }
+
+  // ---------- Animations for piece effects ----------
+  function animatePieceMoveEffect(from,to){
+    // Find the DOM elements and create a simple floating glow/trail
+    const cells = boardEl.children;
+    const idxFrom = from[0]*8 + from[1];
+    const idxTo = to[0]*8 + to[1];
+    const elFrom = cells[idxFrom], elTo = cells[idxTo];
+    if(!elFrom || !elTo) return;
+    const piece = elTo.querySelector('.piece');
+    if(!piece) return;
+    const effect = piece.dataset.effect;
+    if(effect === 'glow'){
+      piece.animate([{ boxShadow: '0 8px 22px rgba(124,58,237,0.0)' }, { boxShadow: '0 16px 44px rgba(124,58,237,0.36)' }, { boxShadow: '0 8px 22px rgba(124,58,237,0.0)' }], { duration:900 });
+    } else if(effect === 'glow-trail' || effect === 'golden-trail'){
+      piece.animate([{ transform:'scale(1)', opacity:1 }, { transform:'scale(1.06)', opacity:0.9 }, { transform:'scale(1)', opacity:1 }], { duration:800 });
+    } else if(effect === 'sparkle'){
+      piece.animate([{ transform:'translateY(0)'},{ transform:'translateY(-6px)' },{ transform:'translateY(0)'}],{ duration:700 });
+    } else if(effect === 'royal'){
+      piece.animate([{ transform:'scale(1)'},{ transform:'scale(1.08)'},{ transform:'scale(1)'}],{ duration:900 });
+    } else if(effect === 'ethereal'){
+      piece.animate([{ opacity:0.7, filter:'blur(0px)' },{ opacity:1, filter:'blur(1px)' },{ opacity:0.9 }],{ duration:900 });
+    }
+  }
+
+  // ---------- P2P logic (PeerJS) — uses user's mechanics: host validates moves ----------
+  function initPeerAuto(){
+    // parse ?room param
+    const u = new URL(location.href);
+    const r = u.searchParams.get('room');
+    initPeer(r);
+  }
+
+  function initPeer(autoRoomId){
+    if(STATE.peer){
+      try{ STATE.peer.destroy(); }catch(e){}
+      STATE.peer = null;
+    }
+    const peer = new Peer(undefined, { debug:0 });
+    STATE.peer = peer;
+    peer.on('open', id => {
+      STATE.peerId = id;
+      q('#peerId').textContent = id;
+      q('#onlineStatus').textContent = 'Готов';
+      // if autoRoomId present and not equal our id -> connect (guest)
+      if(autoRoomId && autoRoomId !== id){
+        connectTo(autoRoomId);
+      }
+    });
+    peer.on('connection', c => {
+      // inbound connection => accept as host
+      if(STATE.conn){ c.close(); return; }
+      STATE.conn = c;
+      setupConn(c);
+      STATE.role = 'host';
+      q('#onlineStatus').textContent = 'Игрок подключился';
+      // host sends current state including skin mapping and nicks
+      send({ type:'state', payload: snapshot() });
+      // also send host meta (nick and skin)
+      send({ type:'meta', payload: { nick: STATE.nick, skin: STATE.activeSkin, role:'host' } });
+    });
+    peer.on('error', err => {
+      q('#onlineStatus').textContent = 'Peer err: ' + String(err);
+    });
+  }
+
+  function setupConn(c){
+    c.on('open', ()=> { q('#onlineStatus').textContent = 'Соединение открыто'; });
+    c.on('data', d => handleRemote(d));
+    c.on('close', ()=> { q('#onlineStatus').textContent = 'Соединение закрыто'; STATE.conn = null; STATE.role = 'host'; });
+  }
+
+  function connectTo(id){
+    if(!STATE.peer) initPeer();
+    const c = STATE.peer.connect(id, { reliable
